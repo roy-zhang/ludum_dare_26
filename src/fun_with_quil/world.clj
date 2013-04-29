@@ -1,4 +1,5 @@
 (ns fun-with-quil.world
+  (:require      [fun-with-quil.player :as pl])
  (:use quil.core
        quil.helpers.calc 
        quil.helpers.drawing
@@ -10,7 +11,7 @@
            :cut 10
              })
 
-(defrecord World [resources])
+(defrecord World [resources playersGrid solid commandSet])
 
 
 (defn- noiseFn [[x y] randX randY]
@@ -18,18 +19,50 @@
      (noise (mul-add x 0.01 randX) (mul-add y 0.01 randY))))
 
 (defn new-World [width height randX randY gridSize]
-  (let [resources
+  (let [resources  (apply merge 
+                     (for [y (range-incl 0 height  gridSize) 
+                           x (range-incl 0 width   gridSize)]
+                       {[(quot x gridSize) (quot y gridSize)] (noiseFn [x y] randX randY)}))
         
-        (loop [coods (for [y (range-incl 0 height  gridSize) x (range-incl 0 width gridSize)]  [x y]) 
-               resources  (transient {})]
-              (if-not (empty? coods)
-                 (recur (rest coods) 
-                        (assoc! resources (first coods) (noiseFn (first coods) randX randY)))
-                 (persistent! resources)))
+        emptyMap  (apply merge 
+                     (for [y (range-incl 0 height  gridSize) 
+                           x (range-incl 0 width   gridSize)]
+                       {[(quot x gridSize) (quot y gridSize)] nil}))
         ]
-    
-    (->World resources)
+    (->World resources emptyMap emptyMap #{})
     ))
+
+
+
+;---update
+
+
+(defn wipeout [world player step]
+  (let [suspects (drop-while #(not= %  step) (concat (:lastSeenByWorld player) (:trail player)))
+        id       (:id player)]
+    (reduce (fn [world step]
+              (if (and (nil? ((:solid world) step)) (= id ((:playersGrid world) step)))
+                (assoc-in world [:playersGrid step] nil)
+                world                       
+              ))
+              world
+              suspects)))
+
+(defn update [world players]
+    (let [update-world 
+          (fn [world player]
+            (reduce (fn [world step]  
+                      (if-let [current ((:playersGrid world) step)]
+                        (-> world 
+                          (wipeout player step)
+                          (update-in [:commandSet] conj [:cut current step])
+                          )
+                        (assoc-in world [:playersGrid step] (:id player))))
+                    world (reverse (:lastSeenByWorld player))) )
+          ]
+      (reduce update-world (assoc world :commandSet #{}) players))
+  )
+  
 
 (defn good-resources [world]
   (apply merge

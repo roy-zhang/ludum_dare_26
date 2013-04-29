@@ -12,7 +12,6 @@
            :brown   [111 79 5]
           })
 
-
 (defn setup []
   (smooth)
   (background 0)
@@ -22,11 +21,11 @@
   (ellipse-mode :center)
   (rect-mode :center)
   
-  (set-state! :players  [(atom (pl/new-Player [20 20]
+  (set-state! :players  [(atom (pl/new-Player 1 [20 20]
                                         [\w \s \a \d]
                                         [0 0 255]
                                            ))
-                         (atom (pl/new-Player [10 10]
+                         (atom (pl/new-Player 2 [10 10]
                                         [\i \k \j \l]
                                         [255 0 0]
                                            ))
@@ -39,8 +38,6 @@
               :countDown      (atom 30000)
               )
   )
-
-
 ;--------------------update
          (defn update-lastTime []
            (let [lastTime  @(state :lastTime) ]
@@ -49,84 +46,83 @@
          
          (defn update-countDown [timeSince]
            (if (< @(state :countDown) 0)  (reset! (state :countDown) 0)
-             (swap! (state :countDown) - timeSince)
-           ))
+             (swap! (state :countDown) - timeSince))
+           )
          
-         (defn update-players [timeSince]
+         (defn update-players-time [timeSince]
 	        (dorun
 	          (for [playerAtom (state :players)]
 	            (swap! playerAtom pl/move timeSince (quot (width) (cfg :gridSize)) (quot (height) (cfg :gridSize)) )
 	      )))
          
-         (defn update []
-           (let [timeSince (update-lastTime)]
-	        (update-countDown timeSince)
-            (update-players timeSince))          
-           )
+         (defn update-players-trails [world]
+	        (dorun
+	          (for [playerAtom (state :players)]
+	            (swap! playerAtom pl/update-trail world )
+	      )))
+         
+ (defn update []
+   (let [timeSince (update-lastTime)]
+    (update-countDown timeSince)
+    (update-players-time timeSince))
+   
+   (swap! (state :world) wd/update (mapv deref (state :players)))
+  
+   (update-players-trails @(state :world)))
+   
          
          
 ;-----------------------draw        
-(defn draw-grid []
-  "grid of 10 x 10"
-  (stroke 0 0 0 10)
-  (fill 0 0 0)
-  (dorun
-    (for [y (range-incl 5 (height) (cfg :gridSize))
-          x (range-incl 5 (width) (cfg :gridSize))]
-      (rect x y 10 10))))
 
+(defn cood [xy]
+  (* (cfg :gridSize) xy))
 
-(defn draw-players []
-   
-  (no-fill)   
-       
-   ;trail     
-  (stroke-weight 1)
-  (dorun
-   (for [playerAtom (state :players)]
-       (do           (apply stroke (:color @playerAtom))  
-       (dorun 
-          (for [[px py] (:trail @playerAtom)]
-            (rect (* (cfg :gridSize) px) (* (cfg :gridSize) py) (cfg :gridSize) (cfg :gridSize))))
-       )))
-        
-        
-   ;circles
-   (stroke-weight 4)
-	  (dorun
-	   (for [playerAtom (state :players)]
-	     (let [[x y] (:pos @playerAtom)
-	           rad   (max 3 (pl/total-energy @playerAtom) )]
-	       (apply stroke (:color @playerAtom))
-	    
-	       (ellipse (* x (cfg :gridSize)) (* y (cfg :gridSize)) (* 5 rad) (* 5 rad))            
-	     )))
-          
-   (stroke-weight 1)
-  )
+		(defn draw-players []   
+		  (no-fill)   
+		       
+		   ;trail     
+		  (stroke-weight 1)
+		  (dorun
+		   (for [playerAtom (state :players)]
+		       (do           (apply stroke (:color @playerAtom))  
+		       (dorun 
+		          (for [[px py] (:trail @playerAtom)]
+		            (rect (cood px) (cood py) (cfg :gridSize) (cfg :gridSize))))
+		       )))
   
-
-(defn draw-world []
-  ;(stroke-weight 1)
-  (no-stroke)
-  (apply fill (cfg :yellow))
-  (dorun
-   (for [[[x y] resource] (wd/good-resources @(state :world))]
-     (rect x y resource resource)))
+		   ;circles
+		   (stroke-weight 4)
+			  (dorun
+			   (for [playerAtom (state :players)]
+			     (let [[x y] (:pos @playerAtom)
+			           rad   (max 3 (pl/total-energy @playerAtom) )]
+			       (apply stroke (:color @playerAtom))
+			    
+			       (ellipse (cood x) (cood y) (* 5 rad) (* 5 rad))            
+			     )))
+		  )
   
-  (apply fill (cfg :brown))
-  (dorun
-   (for [[[x y] resource] (wd/bad-resources @(state :world))]
-     (rect x y resource resource)))
-
-  )                 
+		(defn draw-world []
+		  ;(stroke-weight 1)
+		  (no-stroke)
+		  (apply fill (cfg :yellow))
+		  (dorun
+		   (for [[[x y] resource] (wd/good-resources @(state :world))]
+		     (rect (cood x) (cood y) resource resource)))
+  
+		  (apply fill (cfg :brown))
+		  (dorun
+		   (for [[[x y] resource] (wd/bad-resources @(state :world))]
+		     (rect (cood x) (cood y) resource resource)))
+		
+		  )                 
 
 (defn draw []
     
    ;update
     (update)
    
-    (background 255)
+    (background 245)
     ;(draw-squares 5 5)
     (draw-world)
     ;(draw-grid)

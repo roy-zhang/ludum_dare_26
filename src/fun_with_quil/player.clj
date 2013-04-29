@@ -1,6 +1,6 @@
 (ns fun-with-quil.player)
 
-(defrecord Player [pos keys color energy release commandQueue trail])
+(defrecord Player [id pos keys color energy release commandQueue trail lastSeenByWorld])
 
 (def cfg { :compression 10
               :milliPerPos 2
@@ -8,14 +8,16 @@
 
 (defn now [] (java.lang.System/currentTimeMillis))
 
-(defn new-Player [startPos keys color]
-    (->Player  startPos 
+(defn new-Player [id startPos keys color]
+    (->Player id
+              startPos 
               (apply hash-map (interleave keys [:u :d :l :r]))
               color
               {:u nil :d nil :l nil :r nil}
               {:u 0 :d 0 :l 0 :r 0}
               clojure.lang.PersistentQueue/EMPTY
               '()
+              nil
               ))
   
 
@@ -42,13 +44,13 @@
 (defn- move-trail [player oldx oldy dir]
   (let [[cx cy] (:pos player)
         path    (case dir
-			      :u (map #(vector oldx %) (reverse (range cy oldy)))
-			      :d (map #(vector oldx %)  (range (inc oldy) (inc cy)))
-			      :l (map #(vector % oldy) (reverse (range cx oldx)))
-			      :r (map #(vector % oldy) (range (inc oldx) (inc cx)))
+			      :u (map #(vector oldx %)  (range cy oldy))
+			      :d (map #(vector oldx %) (reverse (range (inc oldy) (inc cy))))
+			      :l (map #(vector % oldy)  (range cx oldx))
+			      :r (map #(vector % oldy) (reverse (range (inc oldx) (inc cx))))
 			      )
         ]
-    (update-in player [:trail] (partial reduce conj) path)
+    (assoc-in player [:lastSeenByWorld] path)
 	      ))
 
 (defn- move-pos [player dir milli width height]
@@ -85,6 +87,17 @@
           )))
     player))
 
+(defn update-trail  [player world]
+  (let [
+        relevantCmds (filter (fn [[cmd victim cood]] (= (:id player) victim)) (:commandSet world))
+        newTrail     (reduce  (fn [trail cmd] 
+						        (case (first cmd)
+						          :cut (take-while #(not= %  (last cmd)) trail)
+					              )) (concat (:lastSeenByWorld player) (:trail player)) relevantCmds)
+        ]
+    (-> player
+      (assoc :trail newTrail)
+      (assoc :lastSeenByWorld '() ))))
 
 (defn total-energy [player]
    (quot
