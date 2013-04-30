@@ -19,14 +19,14 @@
            :resources-fade-to    [255]
            
            :start-fade-trails    30000
-           :stop-fade-trails      5000
+           :stop-fade-trails      0
            :trails-fade-to       [255]
            
            :start-fade-solids    50000
            :stop-fade-solids     25000
            :solids-fade-to       [255]
            
-           :start-fade-circles   20000
+           :start-fade-circles   30000
            :stop-fade-circles    0
            :circles-fade-to      [255]
           })
@@ -63,9 +63,11 @@
               )
   )
 
+
+
    (defn- reset-round []
      (when (= 1 @(state :stage))
-     (dorun  (map reset! (state :players)  
+	   (dorun  (map reset! (state :players)  
                  [ (pl/new-Player 1 [20 20]
                                   [\w \s \a \d]
                                   [0 0 255]
@@ -79,6 +81,11 @@
                                  [0 255 0]
                                  )
                   ]))
+	          
+	       (reset! (state :world )    (wd/new-World (width) (height) (rand-int 200) (rand-int 200) (cfg :gridSize)))
+	       (reset! (state :lastTime) (java.lang.System/currentTimeMillis))
+	       (reset! (state :countDown) (cfg :round-duration))
+       ))
 
 (defn next-stage []
  (reset-round)
@@ -86,11 +93,6 @@
    (swap! (state :stage) nextStage)))
 
 
-            
-         (reset! (state :world )    (wd/new-World (width) (height) (rand-int 200) (rand-int 200) (cfg :gridSize)))
-         (reset! (state :lastTime) (java.lang.System/currentTimeMillis))
-         (reset! (state :countDown) (cfg :round-duration))
-       ))
 
 ;--------------------update
          (defn update-lastTime []
@@ -187,7 +189,6 @@
 		  (dorun   
            (for [ [[x y] id] (filter (fn [[k v]] (not (nil? v) )) (:solid @(state :world)))]
              (do
-               ;(apply stroke (conj (vec (colors (dec id))) fullness) )
                (apply fill  (whiten (colors (dec id)) fullness) )
                (rect (cood x) (cood y) (cfg :gridSize) (cfg :gridSize)))) 
            )))
@@ -227,31 +228,39 @@
 	    (draw-players-solids  (fullness @(state :countDown) (cfg :start-fade-solids)    (cfg :stop-fade-solids)))   
 	    (draw-players-circles (fullness @(state :countDown) (cfg :start-fade-circles)   (cfg :stop-fade-circles)))
      
+        (fill 255 150 0)
+        (text (str @(state :countDown)) 10 10)
+     
         (when ( = 0 @(state :countDown))
           (next-stage))
     )
     
      (when (= 3 @(state :stage))
+       (background 0)
        (let [cx (quot (width) 2)
-             cy (quot (width) 4)]
-         (fill 255)
-         (ellipse cx cy 100 100)
+             cy (quot (width) 2)]
+         (stroke 255)
          (fill 0)
+         (ellipse cx cy 200 200)
+         (apply fill (cfg :yellow))
          (text (str "~ Round Over ~") (- cx 40) cy)
-         (text (str "click to continue") (- cx 50) (+ 10 cy))
+         (text (str "click to continue") (- cx 40) (+ 20 cy))
       ))
     
     (when (= 4 @(state :stage))
      (let [cx (quot (width) 2)
-           cy (quot (width) 4)
-           scores (wd/score-players @(state :stage))]
+           cy (quot (width) 2)
+           scores (wd/score-players @(state :world))]
+       
+       (println  (str "eeeee" scores))
       (draw-world 255)
-      (draw-players-solids 150)
+      (draw-players-solids 100)
       
-      (fill 0)
-      (rect cx cy 75 75)
       (fill 255)
-       (text (str "Blue: "  (scores 1)) (- cx 40) (-30 cy))
+      (stroke 0)
+      (rect cx cy 200 150)
+      (fill 0)
+       (text (str "Blue: "  (scores 1))  (- cx 40)  (- 30 cy))
        (text (str "Red: "   (scores 2))  (- cx 40)  (- 10 cy))
        (text (str "Green: " (scores 3))  (- cx 40)  (+ 10 cy))
       
@@ -275,10 +284,15 @@
   (map #(swap! % pl/key-release (raw-key))
     (state :players))))
 
-(defn next-stage []
- (reset-round)
- (let [nextStage {1 2 2 3 3 4 4 1}]
-   (swap! (state :stage) nextStage)))
+
+(defsketch ludum-dare-26
+  :title "tuber tussle"
+  :setup setup
+  :size [1000 1000]
+  :key-pressed key-press
+  :key-released key-release
+   :mouse-released next-stage
+  :draw draw)
 
 
 (defn -main [& args]

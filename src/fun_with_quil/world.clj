@@ -141,15 +141,16 @@
   
 
 (defn score-players [world]
-  (let [grouped (group-by (fn [pos id] id) (:solid world))]
-	  (apply merge
-          (map (fn [id bag] 
-	         { id  (->> bag
-	           (map (fn [pos id] pos))
-	           (map (:resources world))
-	           (map #(- % (cfg :cut)))
-	           (apply +))               }) 
-	       (dissoc grouped nil)) )))
+  (let [grouped (group-by second (:solid world))]
+     (->> (dissoc grouped nil) 
+       (map (fn [[id bag]] 
+              { id  (->> bag
+                      (map first)
+                      (map (:resources world))
+                      (map #(- % (cfg :cut)))
+                      (apply +))               }))   
+       (apply merge)
+   )))
 	  
 
 
