@@ -93,6 +93,7 @@
         newTrail     (reduce  (fn [trail cmd] 
 						        (case (first cmd)
 						          :cut (take-while #(not= %  (last cmd)) trail)
+                                  trail
 					              )) (concat (:lastSeenByWorld player) (:trail player)) relevantCmds)
         ]
     (-> player
@@ -110,4 +111,5 @@
       )
        (* (cfg :compression) (cfg :milliPerPos))
     ))
+
     

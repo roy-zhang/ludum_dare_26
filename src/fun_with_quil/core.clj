@@ -1,15 +1,34 @@
 (ns fun-with-quil.core
   (:require      [fun-with-quil.player :as pl]
                  [fun-with-quil.world  :as wd])
- (:use quil.core
-       quil.helpers.calc 
-       quil.helpers.drawing
-       quil.helpers.seqs)
+	 (:use quil.core
+	       quil.helpers.calc 
+	       quil.helpers.drawing
+	       quil.helpers.seqs)
+	(:gen-class)
  )
 
 (def cfg { :gridSize 10
            :yellow  [255 255 102]
            :brown   [111 79 5]
+           
+           :round-duration       60000
+           
+           :start-fade-resources 60000
+           :stop-fade-resources  30000
+           :resources-fade-to    [255]
+           
+           :start-fade-trails    30000
+           :stop-fade-trails     10000
+           :trails-fade-to       [255]
+           
+           :start-fade-solids    50000
+           :stop-fade-solids     25000
+           :solids-fade-to       [255]
+           
+           :start-fade-circles   20000
+           :stop-fade-circles    0
+           :circles-fade-to      [255]
           })
 
 (defn setup []
@@ -29,13 +48,18 @@
                                         [\i \k \j \l]
                                         [255 0 0]
                                            ))
+                         (atom (pl/new-Player 3 [30 30]
+                                       [\8 \5 \4 \6]
+                                        [0 255 0]
+                                           ))
                          ]
               :world    (atom (wd/new-World (width) (height) (rand-int 200) (rand-int 200) (cfg :gridSize)))
               
               :message  (atom "Click on screen and type a key")
               :lastTime (atom (java.lang.System/currentTimeMillis))
               :alreadyPressed (atom #{})
-              :countDown      (atom 30000)
+              :countDown      (atom 60000)
+              :stage          1
               )
   )
 ;--------------------update
@@ -62,14 +86,17 @@
 	      )))
          
  (defn update []
-   (let [timeSince (update-lastTime)]
-    (update-countDown timeSince)
-    (update-players-time timeSince))
+   (-> (update-lastTime)
+    (update-countDown)
+    (update-players-time))
    
    (swap! (state :world) wd/update (mapv deref (state :players)))
+   (update-players-trails @(state :world))
+     
+   (swap! (state :world) wd/wipe-cmds)
+     
+     )
   
-   (update-players-trails @(state :world)))
-   
          
          
 ;-----------------------draw        
@@ -77,60 +104,88 @@
 (defn cood [xy]
   (* (cfg :gridSize) xy))
 
-		(defn draw-players []   
-		  (no-fill)   
-		       
-		   ;trail     
-		  (stroke-weight 1)
+		(defn fullness [timeLeft startFade endFade]
+			      (cond 
+			        (> timeLeft startFade) 255
+			        (< timeLeft endFade)   0
+			        :else (* 255 (/  (- timeLeft endFade) (- startFade endFade))
+							  )))
+
+		(defn draw-world [fullness]
+		  "resources"
+          (when (> fullness 0)
+			  (no-stroke)
+			  (apply fill (cfg :yellow))
+			  (dorun
+			   (for [[[x y] resource] (wd/good-resources @(state :world))]
+			     (rect (cood x) (cood y) resource resource)))
+	  
+			  (apply fill (cfg :brown))
+			  (dorun
+			   (for [[[x y] resource] (wd/bad-resources @(state :world))]
+			     (rect (cood x) (cood y) resource resource)))
+			  ))
+  
+        (defn draw-night [fullness]
+          (no-stroke)
+          (fill 0 (- 255 fullness))
+          (rect (quot (width) 2) (quot (height) 2) (width) (height))
+          )
+  
+
+		(defn draw-players-trails [fullness]   
+		  (no-stroke)
 		  (dorun
-		   (for [playerAtom (state :players)]
-		       (do           (apply stroke (:color @playerAtom))  
+		   (for [playerAtom (state :players) 
+                  :let [[r g b]    (:color @playerAtom)]]
+		       (do           (fill r g b fullness)  ; ( stroke r g b) 
 		       (dorun 
 		          (for [[px py] (:trail @playerAtom)]
-		            (rect (cood px) (cood py) (cfg :gridSize) (cfg :gridSize))))
-		       )))
+		            (rect (cood px) (cood py) 7 7)))
+		       ))))
   
-		   ;circles
-		   (stroke-weight 4)
+        (defn whiten [color fullness]
+          (mapv #(+ % (* (- 255 %) (- 1 (/ fullness 255))))
+                color)
+          )
+  
+        (defn draw-players-solids [fullness]   
+        ;(stroke-weight 3)  
+        (no-stroke)
+		(let [colors (mapv :color (mapv deref (state :players)))]
+		  (dorun   
+           (for [ [[x y] id] (filter (fn [[k v]] (not (nil? v) )) (:solid @(state :world)))]
+             (do
+               ;(apply stroke (conj (vec (colors (dec id))) fullness) )
+               (apply fill  (whiten (colors (dec id)) fullness) )
+               (rect (cood x) (cood y) (cfg :gridSize) (cfg :gridSize)))) 
+           )))
+            
+        (defn draw-players-circles [fullness]
+  		  (no-fill)   
+          (stroke-weight 4)
 			  (dorun
 			   (for [playerAtom (state :players)]
 			     (let [[x y] (:pos @playerAtom)
 			           rad   (max 3 (pl/total-energy @playerAtom) )]
-			       (apply stroke (:color @playerAtom))
-			    
+			       (apply stroke (conj (vec (:color @playerAtom)) fullness))
 			       (ellipse (cood x) (cood y) (* 5 rad) (* 5 rad))            
-			     )))
-		  )
+			     ))))
   
-		(defn draw-world []
-		  ;(stroke-weight 1)
-		  (no-stroke)
-		  (apply fill (cfg :yellow))
-		  (dorun
-		   (for [[[x y] resource] (wd/good-resources @(state :world))]
-		     (rect (cood x) (cood y) resource resource)))
-  
-		  (apply fill (cfg :brown))
-		  (dorun
-		   (for [[[x y] resource] (wd/bad-resources @(state :world))]
-		     (rect (cood x) (cood y) resource resource)))
 		
-		  )                 
 
-(defn draw []
-    
-   ;update
+(defn draw [] 
     (update)
-   
-    (background 245)
-    ;(draw-squares 5 5)
-    (draw-world)
-    ;(draw-grid)
-    (draw-players)
     
-    (stroke 10 10 10)
-    (reset! (state :message) (str "last key: "  (key-code)  (:release @(first (state :players)))   ))
-    (text @(state :message) 20 60)
+    (background 255)
+    (draw-world           (fullness @(state :countDown) (cfg :start-fade-resources) (cfg :stop-fade-resources)))
+    (draw-night           (fullness @(state :countDown) (cfg :start-fade-resources) (cfg :stop-fade-resources)))
+    (draw-players-trails  (fullness @(state :countDown) (cfg :start-fade-resources) (cfg :stop-fade-resources)))
+    (draw-players-solids  (fullness @(state :countDown) (cfg :start-fade-solids)    (cfg :stop-fade-solids)))   
+    (draw-players-circles (fullness @(state :countDown) (cfg :start-fade-circles)   (cfg :stop-fade-circles)))
+    
+
+   ; (text (str "scores" (mapv (partial wd/score-player @(state :world)) (mapv deref (state :players))) 20 60))
     (text (str "time left: " (quot @(state :countDown) 1000)) 20 80)
   )
 
@@ -149,6 +204,15 @@
   (map #(swap! % pl/key-release (raw-key))
     (state :players))))
 
+
+
+(defn mouse-pressed []
+  
+  
+  
+  )
+
+
 (defsketch ludum-dare-26
   :title "tuber tussle"
   :setup setup
@@ -156,3 +220,15 @@
   :key-pressed key-press
   :key-released key-release
   :draw draw)
+
+
+(defn -main [& args]
+	(defsketch ludum-dare-26
+	  :title "tuber tussle"
+	  :setup setup
+	  :size [1000 1000]
+	  :key-pressed key-press
+	  :key-released key-release
+      :mouse-pressed mouse-pressed
+	  :draw draw)
+)

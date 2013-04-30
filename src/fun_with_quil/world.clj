@@ -37,32 +37,113 @@
 ;---update
 
 
-(defn wipeout [world player step]
-  (let [suspects (drop-while #(not= %  step) (concat (:lastSeenByWorld player) (:trail player)))
-        id       (:id player)]
-    (reduce (fn [world step]
-              (if (and (nil? ((:solid world) step)) (= id ((:playersGrid world) step)))
-                (assoc-in world [:playersGrid step] nil)
-                world                       
-              ))
-              world
-              suspects)))
-
-(defn update [world players]
+(defn update-grid [world players]
+  "update playergrid, or add cut to cmds"
     (let [update-world 
           (fn [world player]
             (reduce (fn [world step]  
                       (if-let [current ((:playersGrid world) step)]
-                        (-> world 
-                          (wipeout player step)
-                          (update-in [:commandSet] conj [:cut current step])
+                          (if (= current (:id player))
+                            (-> world
+                              (update-in  [:commandSet] conj [:box current step])
+                              (update-in  [:commandSet] conj [:cut current step]))
+                            (update-in world [:commandSet] conj [:cut current step])
                           )
                         (assoc-in world [:playersGrid step] (:id player))))
                     world (reverse (:lastSeenByWorld player))) )
           ]
       (reduce update-world (assoc world :commandSet #{}) players))
   )
+
+
+	(defn- wipeout [world player step]
+	  (let [suspects (drop-while #(not= %  step) (concat (:lastSeenByWorld player) (:trail player)))
+	        id       (:id player)]
+	    (reduce (fn [world step]
+	              (if (and (nil? ((:solid world) step)) (= id ((:playersGrid world) step)))
+	                (assoc-in world [:playersGrid step] nil)
+	                world                       
+	              ))
+	              world
+	              suspects)))
+ 
+(defn update-trails [world players]
+  "playersgrid remove cut off"
+  (reduce (fn [world [type victim place]] 
+	        (case type
+	          :cut (wipeout world (nth players (dec victim)) place)
+               world
+              ))
+          world
+         (:commandSet world))
+    )
+
+    (defn- flooded [bounds]
+      (let [someMidPoint (mapv #(quot % 2) (mapv + (first bounds) (nth bounds (quot (count bounds) 2))))
+            notInBoundsOrFound  (fn [found pos] 
+                               (not (or (contains? found pos) 
+                                        (contains? (set bounds) pos))))]
+      (loop [ [top & rest] (list someMidPoint)
+              found  #{}  ]
+        (if (< (count rest) 400)
+	        (if top
+		       (if (notInBoundsOrFound found top)
+		           (let [ up (mapv + top [0 -1]) 
+		                  dw (mapv + top [0 1])
+		                  lf (mapv + top [-1 0])
+		                  rt (mapv + top [1 0])]
+				          (recur 
+					          (cond-> rest
+					             (notInBoundsOrFound found up)   (conj up)
+					             (notInBoundsOrFound found dw)   (conj dw)
+					             (notInBoundsOrFound found lf)   (conj lf)
+					             (notInBoundsOrFound found rt)   (conj rt)
+					                )
+				              (conj found top)) )
+		          (recur rest found))
+	           found)
+         #{}) )
+      ))
+          
+
+	(defn- boxout [world player step]
+	  (let [suspects (take-while #(not= %  step) (rest (drop-while #(not= %  step) (concat (:lastSeenByWorld player) (:trail player)))))
+	        id       (:id player)]
+         (if (every? #(= id ((:playersGrid world) %)) suspects)
+           (reduce (fn [world step]
+                      (assoc-in world [:solid step] id))
+                    world
+                    (flooded suspects))   
+            world)))
+
+
+ (defn update-boxes [world players]
+  (reduce (fn [world [type victim place]] 
+	        (case type
+	          :box (boxout world (nth players (dec victim)) place)
+               world
+              ))
+          world
+         (:commandSet world))
+    )
+
+ (defn update [world players]
+  (-> world
+    (update-grid players)
+    (update-boxes players)
+    (update-trails players)
+
+  ))
+ 
+(defn wipe-cmds [world]
+  (assoc world :commandSet #{}))
   
+
+(defn score-player [world player]
+  (let [trail (:trail player)]
+   ; (+  (apply + (map #(- % (cfg :cut)) (map (:resources world) (keys (filter (fn [[k v]] (= v (:id player))) (:solid world)))  )))
+    (apply + (map #(- % (cfg :cut)) (map (:resources world) trail)))));)
+
 
 (defn good-resources [world]
   (apply merge
