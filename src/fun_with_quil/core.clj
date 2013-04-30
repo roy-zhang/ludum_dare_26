@@ -62,6 +62,36 @@
               :stage          (atom 1)
               )
   )
+
+   (defn- reset-round []
+     (when (= 1 @(state :stage))
+     (dorun  (map reset! (state :players)  
+                 [ (pl/new-Player 1 [20 20]
+                                  [\w \s \a \d]
+                                  [0 0 255]
+                                  )
+                  (pl/new-Player 2 [10 10]
+                                 [\i \k \j \l]
+                                 [255 0 0]
+                                 )
+                  (pl/new-Player 3 [30 30]
+                                 [\8 \5 \4 \6]
+                                 [0 255 0]
+                                 )
+                  ]))
+
+(defn next-stage []
+ (reset-round)
+ (let [nextStage {1 2 2 3 3 4 4 1}]
+   (swap! (state :stage) nextStage)))
+
+
+            
+         (reset! (state :world )    (wd/new-World (width) (height) (rand-int 200) (rand-int 200) (cfg :gridSize)))
+         (reset! (state :lastTime) (java.lang.System/currentTimeMillis))
+         (reset! (state :countDown) (cfg :round-duration))
+       ))
+
 ;--------------------update
          (defn update-lastTime []
            (let [lastTime  @(state :lastTime) ]
@@ -245,42 +275,10 @@
   (map #(swap! % pl/key-release (raw-key))
     (state :players))))
 
-   (defn- reset-round []
-     (when (= 1 @(state :stage))
-	   (dorun  (map reset! (state :players)  
-                 [ (pl/new-Player 1 [20 20]
-                                  [\w \s \a \d]
-                                  [0 0 255]
-                                  )
-                  (pl/new-Player 2 [10 10]
-                                 [\i \k \j \l]
-                                 [255 0 0]
-                                 )
-                  (pl/new-Player 3 [30 30]
-                                 [\8 \5 \4 \6]
-                                 [0 255 0]
-                                 )
-                  ]))
-	          
-	       (reset! (state :world )    (wd/new-World (width) (height) (rand-int 200) (rand-int 200) (cfg :gridSize)))
-	       (reset! (state :lastTime) (java.lang.System/currentTimeMillis))
-	       (reset! (state :countDown) (cfg :round-duration))
-       ))
-
 (defn next-stage []
  (reset-round)
  (let [nextStage {1 2 2 3 3 4 4 1}]
    (swap! (state :stage) nextStage)))
-
-
-(defsketch ludum-dare-26
-  :title "tuber tussle"
-  :setup setup
-  :size [1000 1000]
-  :key-pressed key-press
-  :key-released key-release
-   :mouse-released next-stage
-  :draw draw)
 
 
 (defn -main [& args]
