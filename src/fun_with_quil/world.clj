@@ -79,6 +79,7 @@
     )
 
     (defn- flooded [bounds]
+      "still need to check when going out of bounds, stops at negatives or greater than width/height"
       (let [someMidPoint (mapv #(quot % 2) (mapv + (first bounds) (nth bounds (quot (count bounds) 2))))
             notInBoundsOrFound  (fn [found pos] 
                                (not (or (contains? found pos) 
@@ -139,10 +140,17 @@
   (assoc world :commandSet #{}))
   
 
-(defn score-player [world player]
-  (let [trail (:trail player)]
-   ; (+  (apply + (map #(- % (cfg :cut)) (map (:resources world) (keys (filter (fn [[k v]] (= v (:id player))) (:solid world)))  )))
-    (apply + (map #(- % (cfg :cut)) (map (:resources world) trail)))));)
+(defn score-players [world]
+  (let [grouped (group-by (fn [pos id] id) (:solid world))]
+	  (apply merge
+          (map (fn [id bag] 
+	         { id  (->> bag
+	           (map (fn [pos id] pos))
+	           (map (:resources world))
+	           (map #(- % (cfg :cut)))
+	           (apply +))               }) 
+	       (dissoc grouped nil)) )))
+	  
 
 
 (defn good-resources [world]
