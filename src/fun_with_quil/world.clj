@@ -82,11 +82,17 @@
       "still need to check when going out of bounds, stops at negatives or greater than width/height"
       (let [someMidPoint (mapv #(quot % 2) (mapv + (first bounds) (nth bounds (quot (count bounds) 2))))
             notInBoundsOrFound  (fn [found pos] 
-                               (not (or (contains? found pos) 
-                                        (contains? (set bounds) pos))))]
+	                               (not (or (contains? found pos) 
+	                                        (contains? (set bounds) pos)
+                                            )))
+            abort?               (fn [[x y]]
+                                   (or (< x 1)
+                                       (< y 1)
+                                       (>= x  (quot (width) 10))
+                                       (>= y (quot (height) 10))))]
       (loop [ [top & rest] (list someMidPoint)
               found  #{}  ]
-        (if (< (count rest) 400)
+        (if (or (< (count rest) 500) (not (abort? top)))
 	        (if top
 		       (if (notInBoundsOrFound found top)
 		           (let [ up (mapv + top [0 -1]) 
@@ -110,7 +116,7 @@
 	(defn- boxout [world player step]
 	  (let [suspects (take-while #(not= %  step) (rest (drop-while #(not= %  step) (concat (:lastSeenByWorld player) (:trail player)))))
 	        id       (:id player)]
-         (if (every? #(= id ((:playersGrid world) %)) suspects)
+         (if (and (< 5 (count suspects)) (every? #(= id ((:playersGrid world) %)) suspects))
            (reduce (fn [world step]
                       (assoc-in world [:solid step] id))
                     world

@@ -16,19 +16,15 @@
            
            :start-fade-resources 60000
            :stop-fade-resources  30000
-           :resources-fade-to    [255]
            
-           :start-fade-trails    30000
-           :stop-fade-trails      0
-           :trails-fade-to       [255]
+           :start-fade-trails    20000
+           :stop-fade-trails         0
            
            :start-fade-solids    50000
            :stop-fade-solids     25000
-           :solids-fade-to       [255]
            
            :start-fade-circles   30000
            :stop-fade-circles    0
-           :circles-fade-to      [255]
           })
 
 (defn setup []
@@ -164,7 +160,6 @@
           (fill 0 (- 255 fullness))
           (rect (quot (width) 2) (quot (height) 2) (width) (height))
           )
-  
 
 		(defn draw-players-trails [fullness]   
 		  (no-stroke)
@@ -177,21 +172,27 @@
 		            (rect (cood px) (cood py) 7 7)))
 		       ))))
   
-        (defn whiten [color fullness]
-          (mapv #(+ % (* (- 255 %) (- 1 (/ fullness 255))))
-                color)
-          )
+		        (defn- whiten [color fullness]
+		          (mapv #(+ % (* (- 255 %) (- 1 (/ fullness 255))))
+		                color)
+		          )
   
-        (defn draw-players-solids [fullness]   
+        (defn draw-players-solids [fullness]    "group-by then "
         ;(stroke-weight 3)  
         (no-stroke)
-		(let [colors (mapv :color (mapv deref (state :players)))]
-		  (dorun   
-           (for [ [[x y] id] (filter (fn [[k v]] (not (nil? v) )) (:solid @(state :world)))]
-             (do
-               (apply fill  (whiten (colors (dec id)) fullness) )
-               (rect (cood x) (cood y) (cfg :gridSize) (cfg :gridSize)))) 
-           )))
+		(let [colors   (mapv :color (mapv deref (state :players)))
+              grouped  (apply merge (map (fn [[id bag]] 
+                                           { id (map first bag) })
+                              (dissoc (group-by second (:solid @(state :world))) nil) ))
+              colorSolid (fn [color positions]
+                           (apply fill color)
+                           (dorun
+                             (for [[x y] positions]
+                               (rect (cood x) (cood y) (cfg :gridSize) (cfg :gridSize)))))]
+              (dorun
+                (for [[id bag] grouped]
+                  (colorSolid (whiten (colors (dec id)) fullness) bag)))))
+
             
         (defn draw-players-circles [fullness]
   		  (no-fill)   
@@ -202,9 +203,7 @@
 			           rad   (max 3 (pl/total-energy @playerAtom) )]
 			       (apply stroke (conj (vec (:color @playerAtom)) fullness))
 			       (ellipse (cood x) (cood y) (* 5 rad) (* 5 rad))            
-			     ))))
-  
-		
+			     ))))		
 
 (defn draw [] 
   (background 255)
@@ -220,7 +219,7 @@
          (text (str "Round lasts for one minute   -   click to continue" ) 20 240)
          
       )
-    (when (= 2 @(state :stage))
+    (when (= 2 @(state :stage)) ;actual game stage
         (update) 
 	    (draw-world           (fullness @(state :countDown) (cfg :start-fade-resources) (cfg :stop-fade-resources)))
 	    (draw-night           (fullness @(state :countDown) (cfg :start-fade-resources) (cfg :stop-fade-resources)))
@@ -237,6 +236,7 @@
     
      (when (= 3 @(state :stage))
        (background 0)
+       (draw-players-solids 0)
        (let [cx (quot (width) 2)
              cy (quot (width) 2)]
          (stroke 255)
@@ -250,33 +250,34 @@
     (when (= 4 @(state :stage))
      (let [cx (quot (width) 2)
            cy (quot (width) 2)
-           scores (wd/score-players @(state :world))]
-       
-       (println  (str "eeeee" scores))
+           scores (wd/score-players @(state :world))
+           idToName {1 "Blue" 2 "Red" 3 "Green"}]
+      
       (draw-world 255)
       (draw-players-solids 100)
       
       (fill 255)
-      (stroke 0)
-      (rect cx cy 200 150)
-      (fill 0)
-       (text (str "Blue: "  (scores 1))  (- cx 40)  (- 30 cy))
-       (text (str "Red: "   (scores 2))  (- cx 40)  (- 10 cy))
-       (text (str "Green: " (scores 3))  (- cx 40)  (+ 10 cy))
+      (stroke-weight 1)
+      (stroke 10 120 10)
+      (rect   100 110 150 130)
       
-      
-      ))
-
-  )
+      (fill 0)       
+         (when (scores 1)  (text (str "Blue:     " (quot (scores 1) 1)) 60 80))
+         (when (scores 2)  (text (str "Red:      " (quot (scores 2) 1)) 60 100))
+         (when (scores 3)  (text (str "Green:  " (quot (scores 3) 1)) 60 120))
+         
+         (text (str "Winner: " (idToName (apply (partial max-key scores) (keys scores)))) 60 145)
+      )))
 
 
 (defn key-press []
-  (if-not (contains? @(state :alreadyPressed) (raw-key))
+  (let [pressedKey (raw-key) ]
+  (if-not (contains? @(state :alreadyPressed) pressedKey)
     (do 
-      (swap! (state :alreadyPressed) conj (raw-key))
+      (swap! (state :alreadyPressed) conj pressedKey)
       (dorun
-        (map #(swap! % pl/key-press (raw-key))
-           (state :players))))))
+        (map #(swap! % pl/key-press pressedKey)
+           (state :players)))))))
 
 (defn key-release []
   (swap! (state :alreadyPressed) disj (raw-key))
@@ -284,15 +285,6 @@
   (map #(swap! % pl/key-release (raw-key))
     (state :players))))
 
-
-(defsketch ludum-dare-26
-  :title "tuber tussle"
-  :setup setup
-  :size [1000 1000]
-  :key-pressed key-press
-  :key-released key-release
-   :mouse-released next-stage
-  :draw draw)
 
 
 (defn -main [& args]
@@ -302,7 +294,6 @@
 	  :size [1000 1000]
 	  :key-pressed key-press
 	  :key-released key-release
-      :mouse-released next-stage
-      :mouse-e
+	   :mouse-released next-stage
 	  :draw draw)
 )

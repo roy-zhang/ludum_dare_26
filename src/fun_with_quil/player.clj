@@ -30,15 +30,12 @@
 (defn key-release [player key]
   "records release"
 	  (if-let [dir ((:keys player) key)]
+      (when-let [dirEnergy (get-in player [:energy dir]) ]
 	    (-> player
-	      (assoc-in   [:release dir] (-> player 
-	                                   (get-in [:energy dir]) 
-	                                   (- (now))
-	                                   (- )
-	                                   (quot (cfg :compression))))
-	      (assoc-in [:energy dir] nil)
+	      (assoc-in   [:release dir] (quot (- (now) dirEnergy) (cfg :compression)))
+	      (assoc-in   [:energy dir] nil)
 	      (update-in  [:commandQueue] conj dir)
-	    )
+	    ))
 	    player))
 
 (defn- move-trail [player oldx oldy dir]
