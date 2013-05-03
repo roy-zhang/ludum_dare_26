@@ -5,7 +5,7 @@
 	       quil.helpers.calc 
 	       quil.helpers.drawing
 	       quil.helpers.seqs)
-	(:gen-class)
+	(:gen-class :main :true)
  )
 
 (def cfg { :gridSize 10
@@ -30,7 +30,7 @@
 (defn setup []
   (smooth)
   (background 0)
-  (frame-rate 60)
+  (frame-rate 200)
   (stroke 130, 0 0)
   (fill 255 150)
   (ellipse-mode :center)
@@ -287,13 +287,18 @@
 
 
 
+;https://groups.google.com/forum/#!msg/clj-processing/eY6FpVYX-XU/PhlsIb2fe7gJ
+(defn exit-on-close [sketch]
+  (let [frame (-> sketch .getParent .getParent .getParent .getParent)]
+    (.setDefaultCloseOperation frame javax.swing.JFrame/EXIT_ON_CLOSE)))
+
 (defn -main [& args]
-	(defsketch ludum-dare-26
-	  :title "tuber tussle"
+  (exit-on-close
+	(sketch 
+	  :title "ludum-dare-26 tuber tussle"
 	  :setup setup
 	  :size [1000 1000]
 	  :key-pressed key-press
 	  :key-released key-release
 	   :mouse-released next-stage
-	  :draw draw)
-)
+	  :draw draw)))

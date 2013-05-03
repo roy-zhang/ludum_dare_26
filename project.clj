@@ -5,5 +5,9 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
   :dependencies [[org.clojure/clojure "1.5.0"]
                  [quil "1.6.0"]]
+
+  :aot  [fun-with-quil.core]
+  :jvm-opts ["-Xmx1G"]
+  
   :main fun-with-quil.core
   )
